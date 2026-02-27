@@ -3,9 +3,14 @@ import os
 
 class DatabaseManager:
     def __init__(self, db_path=None):
+        import sys
         if db_path is None:
-            # Use an absolute path based on the project root
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            if getattr(sys, 'frozen', False):
+                # When packaged by PyInstaller, store the DB in the same directory as the executable
+                base_dir = os.path.dirname(sys.executable)
+            else:
+                # Use an absolute path based on the project root
+                base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             self.db_path = os.path.join(base_dir, "speed_dic.db")
         else:
             self.db_path = db_path
