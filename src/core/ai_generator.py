@@ -30,16 +30,20 @@ class AIGenerator:
         """
         
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"} if "gpt-4-turbo" in self.model or "gpt-3.5-turbo" in self.model else None
-            )
-            
+            create_kwargs = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+            if "gpt-4-turbo" in self.model or "gpt-3.5-turbo" in self.model:
+                create_kwargs["response_format"] = {"type": "json_object"}
+            response = self.client.chat.completions.create(**create_kwargs)
+
             content = response.choices[0].message.content
             # Cleanup if the model ignored "only json" instruction
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
             
             data = json.loads(content)
             # Some models might return {"words": [...]} instead of a direct list

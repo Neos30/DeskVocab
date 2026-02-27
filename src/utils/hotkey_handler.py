@@ -19,7 +19,7 @@ class HotkeyHandler:
 
     def _listen(self):
         # 使用 pynput 的 Global Hotkeys 功能
-        with keyboard.GlobalHotkeys({
+        with keyboard.GlobalHotKeys({
             '<ctrl>+<alt>+s': self.toggle_callback
         }) as h:
             h.join()
