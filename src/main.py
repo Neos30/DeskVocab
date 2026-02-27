@@ -8,10 +8,14 @@ from PyQt6.QtCore import QObject, pyqtSignal, QThread
 from PyQt6.QtGui import QIcon
 from src.ui.wallpaper_win import WordBoard
 from src.ui.settings_win import SettingsWin
+from src.ui.history_win import HistoryWin
 from src.utils.hotkey_handler import HotkeyHandler
+from src.utils.logger import get_logger
 from src.core.database import DatabaseManager
 from src.core.srs_engine import SRSCoordinator
 from src.core.ai_generator import AIGenerator
+
+logger = get_logger()
 
 class AIGeneratorWorker(QThread):
     finished = pyqtSignal(list, str)
@@ -29,6 +33,7 @@ class AIGeneratorWorker(QThread):
             new_words = gen.generate_words(self.scene)
             self.finished.emit(new_words, self.scene)
         except Exception as e:
+            logger.error(f"[Worker] 未捕获异常: {e}", exc_info=True)
             self.finished.emit([], str(e))
 
 class AppCoordinator(QObject):
@@ -71,15 +76,17 @@ class AppCoordinator(QObject):
         scene = s.get("scene", "日常口语")
         
         # 启动后台线程生成单词
+        logger.info(f"[Coordinator] 启动生成任务 scene={scene!r} model={s.get('model','')}")
         self.worker = AIGeneratorWorker(s["api_key"], s.get("base_url", ""), s.get("model", ""), scene)
         self.worker.finished.connect(self._on_words_generated)
         self.worker.start()
-        
+
         if self.tray:
             self.tray.showMessage("SpeedDic", "正在使用 AI 生成新单词，请稍候...", QSystemTrayIcon.MessageIcon.Information)
 
     def _on_words_generated(self, new_words, scene):
         if not new_words:
+            logger.warning(f"[Coordinator] 生成失败，返回为空 scene={scene!r}")
             if self.tray:
                 error_msg = scene if scene and scene != self.settings_win.scene_input.text() else "生成失败或解析错误"
                 self.tray.showMessage("SpeedDic - 错误", f"生成单词失败: {error_msg}", QSystemTrayIcon.MessageIcon.Warning)
@@ -100,9 +107,10 @@ def main():
 
     db = DatabaseManager()
     srs = SRSCoordinator(db)
-    
+
     board = WordBoard()
     settings_win = SettingsWin(db)
+    history_win = HistoryWin(db)
     
     coordinator = AppCoordinator(board, db, srs, settings_win)
     
@@ -117,6 +125,8 @@ def main():
     show_action.triggered.connect(coordinator._handle_toggle)
     settings_action = menu.addAction("设置")
     settings_action.triggered.connect(settings_win.show)
+    history_action = menu.addAction("查看学习记录")
+    history_action.triggered.connect(history_win.show)
     exit_action = menu.addAction("退出")
     exit_action.triggered.connect(app.quit)
     tray.setContextMenu(menu)

@@ -1,7 +1,11 @@
 from openai import OpenAI
 import json
+import traceback
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
+from src.utils.logger import get_logger
+
+logger = get_logger()
 
 class WordSchema(BaseModel):
     word: str
@@ -14,6 +18,23 @@ class AIGenerator:
     def __init__(self, api_key: str, base_url: str, model: str):
         self.client = OpenAI(api_key=api_key, base_url=base_url if base_url else None)
         self.model = model
+
+    def test_connection(self) -> tuple[bool, str]:
+        """发送最小请求验证 API 配置是否可用。返回 (ok, message)。"""
+        logger.info(f"[连接验证] model={self.model}, base_url={self.client.base_url}")
+        try:
+            resp = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": "Reply with the single word: ok"}],
+                max_tokens=10,
+            )
+            reply = resp.choices[0].message.content.strip()
+            logger.info(f"[连接验证] 成功，模型回复: {reply!r}")
+            return True, f"连接成功，模型回复: {reply}"
+        except Exception as e:
+            msg = str(e)
+            logger.error(f"[连接验证] 失败: {msg}\n{traceback.format_exc()}")
+            return False, msg
 
     def generate_words(self, scene: str, count: int = 5) -> List[WordSchema]:
         prompt = f"""
@@ -28,7 +49,10 @@ class AIGenerator:
         Return ONLY a JSON list of objects with keys: "word", "phonetic", "definition", "example_en", "example_cn".
         Do not include any other text or markdown formatting.
         """
-        
+
+        logger.info(f"[生成单词] 开始 | scene={scene!r} count={count} model={self.model}")
+        logger.debug(f"[生成单词] Prompt:\n{prompt.strip()}")
+
         try:
             create_kwargs = {
                 "model": self.model,
@@ -36,27 +60,34 @@ class AIGenerator:
             }
             if "gpt-4-turbo" in self.model or "gpt-3.5-turbo" in self.model:
                 create_kwargs["response_format"] = {"type": "json_object"}
-            response = self.client.chat.completions.create(**create_kwargs)
 
+            response = self.client.chat.completions.create(**create_kwargs)
             content = response.choices[0].message.content
-            # Cleanup if the model ignored "only json" instruction
+            logger.debug(f"[生成单词] 原始响应:\n{content}")
+
+            # 处理 markdown 代码块
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0].strip()
             elif "```" in content:
                 content = content.split("```")[1].split("```")[0].strip()
-            
+
             data = json.loads(content)
-            # Some models might return {"words": [...]} instead of a direct list
+
             if isinstance(data, dict) and "words" in data:
                 data = data["words"]
-            elif isinstance(data, dict) and not isinstance(data, list):
-                # If it returned a single object, wrap it or find the list
+            elif isinstance(data, dict):
                 for val in data.values():
                     if isinstance(val, list):
                         data = val
                         break
-            
-            return [WordSchema(**item) for item in data]
+
+            words = [WordSchema(**item) for item in data]
+            logger.info(f"[生成单词] 成功，共 {len(words)} 个: {[w.word for w in words]}")
+            return words
+
+        except json.JSONDecodeError as e:
+            logger.error(f"[生成单词] JSON 解析失败: {e}\n原始内容: {content!r}")
+            return []
         except Exception as e:
-            print(f"Error generating words: {e}")
+            logger.error(f"[生成单词] 异常: {e}\n{traceback.format_exc()}")
             return []
