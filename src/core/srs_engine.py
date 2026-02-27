@@ -56,7 +56,7 @@ class SRSCoordinator:
         query = """
         SELECT w.* FROM words w
         LEFT JOIN review_stats r ON w.id = r.word_id
-        WHERE r.next_review_time <= DATETIME('now') OR r.word_id IS NULL
+        WHERE r.next_review_time <= DATETIME('now', 'localtime') OR r.word_id IS NULL
         ORDER BY r.next_review_time ASC
         LIMIT ?
         """

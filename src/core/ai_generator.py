@@ -12,7 +12,7 @@ class WordSchema(BaseModel):
 
 class AIGenerator:
     def __init__(self, api_key: str, base_url: str, model: str):
-        self.client = OpenAI(api_key=api_key, base_url=base_url)
+        self.client = OpenAI(api_key=api_key, base_url=base_url if base_url else None)
         self.model = model
 
     def generate_words(self, scene: str, count: int = 5) -> List[WordSchema]:

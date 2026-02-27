@@ -53,7 +53,7 @@ class WordBoard(QWidget):
     def _init_ui(self):
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint |
+            Qt.WindowType.WindowStaysOnBottomHint |
             Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -84,6 +84,7 @@ class WordBoard(QWidget):
 
     def set_interaction_mode(self, active: bool):
         self.is_interactive = active
+        self.hide()  # Must hide before changing WindowTransparentForInput on Windows
         self.setWindowFlag(Qt.WindowType.WindowTransparentForInput, not active)
         if active:
             self.title_label.setText("今日待复习 (交互模式)")
