@@ -1,4 +1,4 @@
-# SpeedDic — Learn Vocabulary While Slacking Off. Your Boss Thinks You're Working.
+# DeskVocab — Learn Vocabulary While Slacking Off. Your Boss Thinks You're Working.
 
 > Transparent desktop word cards · AI scene-based vocab · SM-2 spaced repetition · Full mouse-passthrough — zero workflow disruption
 
