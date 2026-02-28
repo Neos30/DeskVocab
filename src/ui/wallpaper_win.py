@@ -15,7 +15,8 @@ _RADIUS      = 14
 
 
 class WordItemWidget(QWidget):
-    review_clicked = pyqtSignal(int, int)
+    # 信号携带 (word_id, action)，action: "mastered" | "vague" | "unclear" | "skip"
+    review_clicked = pyqtSignal(int, str)
 
     def __init__(self, word_id, word, phonetic, definition):
         super().__init__()
@@ -46,10 +47,11 @@ class WordItemWidget(QWidget):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(6)
         btn_row.setContentsMargins(0, 4, 0, 0)
-        for text, q, color in [
-            ("已掌握", 5, "#4CAF50"),
-            ("模糊",   3, "#FF9800"),
-            ("不清楚", 0, "#EF5350"),
+        for text, action, color in [
+            ("已掌握", "mastered", "#4CAF50"),
+            ("模糊",   "vague",    "#FF9800"),
+            ("不清楚", "unclear",  "#EF5350"),
+            ("跳过",   "skip",     "#90A4AE"),
         ]:
             btn = QPushButton(text)
             btn.setFixedHeight(22)
@@ -67,7 +69,7 @@ class WordItemWidget(QWidget):
                     color: white;
                 }}
             """)
-            btn.clicked.connect(lambda _, quality=q: self.review_clicked.emit(self.word_id, quality))
+            btn.clicked.connect(lambda _, a=action: self.review_clicked.emit(self.word_id, a))
             btn_row.addWidget(btn)
         btn_row.addStretch()
         layout.addLayout(btn_row)
@@ -134,7 +136,7 @@ class _TitleBar(QWidget):
 
 
 class WordBoard(QWidget):
-    review_signal = pyqtSignal(int, int)
+    review_signal = pyqtSignal(int, str)
 
     def __init__(self):
         super().__init__()

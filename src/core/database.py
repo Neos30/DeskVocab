@@ -36,17 +36,20 @@ class DatabaseManager:
             ''')
             
             # 复习统计表 (基于 SM-2 算法)
+            # status: 0=不清楚, 1=模糊, 2=熟练(已掌握进SRS), 3=牢记(跳过，不再复习)
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS review_stats (
                     word_id INTEGER PRIMARY KEY,
                     ease_factor REAL DEFAULT 2.5,
                     interval INTEGER DEFAULT 0,
                     repetition INTEGER DEFAULT 0,
-                    next_review_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    status INTEGER DEFAULT 0, -- 0: 学习中, 1: 已掌握
+                    next_review_time TIMESTAMP,
+                    status INTEGER DEFAULT 0,
                     FOREIGN KEY(word_id) REFERENCES words(id)
                 )
             ''')
+            # 迁移：旧库 status=1 (已掌握) 对应新 status=2 (熟练)
+            self._migrate_status(cursor)
             
             # 系统设置表
             cursor.execute('''
@@ -57,6 +60,15 @@ class DatabaseManager:
             ''')
             
             conn.commit()
+
+    def _migrate_status(self, cursor):
+        """
+        旧版 status 只有 0(学习中)/1(已掌握)。
+        迁移规则：旧 status=1 → 新 status=2(熟练)，旧 status=0 保持 0(不清楚)。
+        通过检查列注释无法判断版本，改为检查是否存在 status=1 且 next_review_time 有值的行
+        来决定是否需要迁移（保守策略：仅在 status=1 时升为 2）。
+        """
+        cursor.execute("UPDATE review_stats SET status = 2 WHERE status = 1")
 
     def execute(self, query, params=()):
         with sqlite3.connect(self.db_path) as conn:

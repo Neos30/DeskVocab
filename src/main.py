@@ -53,12 +53,16 @@ class AppCoordinator(QObject):
         self.refresh_signal.connect(self._refresh_data)
         self.board.review_signal.connect(self._handle_review)
         self.settings_win.settings_saved.connect(self._generate_new_words)
+        self.settings_win.doc_words_ready.connect(self._on_doc_words_generated)
 
     def _handle_toggle(self):
         self.board.set_interaction_mode(not self.board.is_interactive)
 
-    def _handle_review(self, word_id, quality):
-        self.srs.update_word_review(word_id, quality)
+    def _handle_review(self, word_id, action):
+        if action == "skip":
+            self.srs.skip_word(word_id)
+        else:
+            self.srs.update_word_review(word_id, action)
         self._refresh_data()
 
     def _refresh_data(self):
@@ -83,6 +87,16 @@ class AppCoordinator(QObject):
 
         if self.tray:
             self.tray.showMessage("SpeedDic", "正在使用 AI 生成新单词，请稍候...", QSystemTrayIcon.MessageIcon.Information)
+
+    def _on_doc_words_generated(self, new_words):
+        for w in new_words:
+            self.db.execute(
+                "INSERT OR IGNORE INTO words (word, phonetic, definition, example_en, example_cn, scene_tag) VALUES (?, ?, ?, ?, ?, ?)",
+                (w.word, w.phonetic, w.definition, w.example_en, w.example_cn, "文档导入")
+            )
+        self._refresh_data()
+        if self.tray:
+            self.tray.showMessage("SpeedDic", f"已从文档导入 {len(new_words)} 个新单词！", QSystemTrayIcon.MessageIcon.Information)
 
     def _on_words_generated(self, new_words, scene):
         if not new_words:
