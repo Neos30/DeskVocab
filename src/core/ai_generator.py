@@ -41,8 +41,8 @@ class AIGenerator:
         根据文档原文，让 AI 提取高频且有学习价值的英文单词。
         自动排除常用停用词（代词、介词、连接词等）。
         """
-        # 截取前 3000 字符避免超出 token 限制
-        excerpt = text[:3000]
+        # 截取前 5000 字符避免超出 token 限制
+        excerpt = text[:5000]
         prompt = f"""
         You are a professional English teacher analyzing a document excerpt.
         From the text below, identify the {count} most frequent and meaningful English words or phrases
@@ -66,7 +66,7 @@ class AIGenerator:
         """
 
         logger.info(f"[文档生成单词] 开始 | 文本长度={len(text)} count={count} model={self.model}")
-        logger.debug(f"[文档生成单词] 截取前 3000 字符作为输入")
+        logger.debug(f"[文档生成单词] 截取前 5000 字符作为输入")
 
         try:
             create_kwargs = {

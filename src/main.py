@@ -52,7 +52,8 @@ class AppCoordinator(QObject):
         self.toggle_signal.connect(self._handle_toggle)
         self.refresh_signal.connect(self._refresh_data)
         self.board.review_signal.connect(self._handle_review)
-        self.settings_win.settings_saved.connect(self._generate_new_words)
+        self.settings_win.settings_saved.connect(self._on_config_saved)
+        self.settings_win.scene_words_ready.connect(self._on_scene_words_generated)
         self.settings_win.doc_words_ready.connect(self._on_doc_words_generated)
 
     def _handle_toggle(self):
@@ -69,22 +70,24 @@ class AppCoordinator(QObject):
         words = self.srs.get_todays_words()
         self.board.refresh_words(words)
 
+    def _on_config_saved(self):
+        """模型配置保存成功，刷新壁纸词库（不触发生成）。"""
+        self._refresh_data()
+
+    def _on_scene_words_generated(self, new_words, scene):
+        self._on_words_generated(new_words, scene)
+
     def _generate_new_words(self):
-        # 从数据库加载设置
+        # 保留兼容入口，供外部直接调用
         res = self.db.fetch_all("SELECT key, value FROM settings")
         s = {k: v for k, v in res}
-        
         if not s.get("api_key"):
             return
-
         scene = s.get("scene", "日常口语")
-        
-        # 启动后台线程生成单词
         logger.info(f"[Coordinator] 启动生成任务 scene={scene!r} model={s.get('model','')}")
         self.worker = AIGeneratorWorker(s["api_key"], s.get("base_url", ""), s.get("model", ""), scene)
         self.worker.finished.connect(self._on_words_generated)
         self.worker.start()
-
         if self.tray:
             self.tray.showMessage("SpeedDic", "正在使用 AI 生成新单词，请稍候...", QSystemTrayIcon.MessageIcon.Information)
 
@@ -102,8 +105,7 @@ class AppCoordinator(QObject):
         if not new_words:
             logger.warning(f"[Coordinator] 生成失败，返回为空 scene={scene!r}")
             if self.tray:
-                error_msg = scene if scene and scene != self.settings_win.scene_input.text() else "生成失败或解析错误"
-                self.tray.showMessage("SpeedDic - 错误", f"生成单词失败: {error_msg}", QSystemTrayIcon.MessageIcon.Warning)
+                self.tray.showMessage("SpeedDic - 错误", f"生成单词失败: {scene}", QSystemTrayIcon.MessageIcon.Warning)
             return
 
         for w in new_words:

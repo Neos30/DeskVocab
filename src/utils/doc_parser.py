@@ -14,8 +14,10 @@ def extract_text(file_path: str) -> str:
         return _extract_docx(file_path)
     elif ext == ".doc":
         return _extract_doc(file_path)
+    elif ext == ".txt":
+        return _extract_txt(file_path)
     else:
-        raise ValueError(f"不支持的文件格式：{ext}，仅支持 .pdf / .docx / .doc")
+        raise ValueError(f"不支持的文件格式：{ext}，仅支持 .pdf / .docx / .doc / .txt")
 
 
 def _extract_pdf(path: str) -> str:
@@ -41,6 +43,11 @@ def _extract_docx(path: str) -> str:
 
     doc = Document(path)
     return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+
+
+def _extract_txt(path: str) -> str:
+    with open(path, encoding="utf-8", errors="ignore") as f:
+        return f.read()
 
 
 def _extract_doc(path: str) -> str:

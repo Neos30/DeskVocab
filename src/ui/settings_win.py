@@ -1,10 +1,9 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QFormLayout, QLineEdit, QPushButton,
     QLabel, QComboBox, QMessageBox, QHBoxLayout, QSpinBox,
-    QFileDialog, QFrame
+    QFileDialog, QFrame, QGroupBox
 )
 from PyQt6.QtCore import pyqtSignal, QThread
-from PyQt6.QtGui import QColor
 from src.core.ai_generator import AIGenerator
 from src.utils.doc_parser import extract_text
 from src.utils.logger import get_logger
@@ -61,82 +60,145 @@ class TestWorker(QThread):
         self.finished.emit(ok, msg)
 
 
+class SceneGeneratorWorker(QThread):
+    """后台线程：场景生成单词"""
+    finished = pyqtSignal(list, str)   # (words, error_or_scene)
+
+    def __init__(self, api_key, base_url, model, scene, count):
+        super().__init__()
+        self.api_key = api_key
+        self.base_url = base_url
+        self.model = model
+        self.scene = scene
+        self.count = count
+
+    def run(self):
+        try:
+            gen = AIGenerator(self.api_key, self.base_url, self.model)
+            words = gen.generate_words(self.scene, self.count)
+            self.finished.emit(words, self.scene)
+        except Exception as e:
+            self.finished.emit([], str(e))
+
+
 class SettingsWin(QWidget):
     settings_saved = pyqtSignal()
-    doc_words_ready = pyqtSignal(list)   # 文档导入生成完成，携带单词列表
+    doc_words_ready = pyqtSignal(list)
+    scene_words_ready = pyqtSignal(list, str)   # (words, scene)
 
     def __init__(self, db_manager):
         super().__init__()
         self.db = db_manager
         self._test_worker = None
         self._doc_worker = None
+        self._scene_worker = None
+        self._config_saved = False
         self._init_ui()
         self._load_settings()
 
+    # ─────────────────────────────────────────────────────────────
+    # UI 初始化
+    # ─────────────────────────────────────────────────────────────
     def _init_ui(self):
         self.setWindowTitle("SpeedDic 设置")
-        self.setFixedSize(420, 560)
-        layout = QVBoxLayout()
+        self.setMinimumWidth(440)
 
-        self.form = QFormLayout()
+        layout = QVBoxLayout()
+        layout.setSpacing(12)
+
+        layout.addWidget(self._build_model_config_group())
+        layout.addWidget(self._build_scene_gen_group())
+        layout.addWidget(self._build_doc_gen_group())
+
+        self.setLayout(layout)
+        self.adjustSize()
+
+    def _build_model_config_group(self) -> QGroupBox:
+        """区块 A：模型配置"""
+        group = QGroupBox("模型配置")
+        v = QVBoxLayout()
+
+        form = QFormLayout()
 
         self.provider_combo = QComboBox()
         self.provider_combo.addItems(list(PROVIDER_PRESETS.keys()))
         self.provider_combo.currentTextChanged.connect(self._on_provider_changed)
-        self.form.addRow("AI 提供商:", self.provider_combo)
+        form.addRow("AI 提供商:", self.provider_combo)
 
         self.api_key_input = QLineEdit()
         self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.form.addRow("API Key:", self.api_key_input)
+        form.addRow("API Key:", self.api_key_input)
 
         self.base_url_input = QLineEdit()
         self.base_url_input.setPlaceholderText("https://api.deepseek.com")
-        self.form.addRow("Base URL:", self.base_url_input)
+        form.addRow("Base URL:", self.base_url_input)
 
         self.model_input = QLineEdit()
         self.model_input.setPlaceholderText("deepseek-chat")
-        self.form.addRow("模型名称:", self.model_input)
+        form.addRow("模型名称:", self.model_input)
 
-        self.scene_input = QLineEdit()
-        self.scene_input.setPlaceholderText("如：互联网架构, 雅思核心词")
-        self.form.addRow("当前场景:", self.scene_input)
-
-        layout.addLayout(self.form)
+        v.addLayout(form)
 
         self.test_btn = QPushButton("验证连接")
         self.test_btn.clicked.connect(self._test_connection)
-        layout.addWidget(self.test_btn)
+        v.addWidget(self.test_btn)
 
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
-        layout.addWidget(self.status_label)
+        v.addWidget(self.status_label)
 
-        self.save_btn = QPushButton("保存设置并生成新词")
-        self.save_btn.clicked.connect(self._save_settings)
-        layout.addWidget(self.save_btn)
+        self.save_config_btn = QPushButton("保存模型配置")
+        self.save_config_btn.clicked.connect(self._save_model_config)
+        v.addWidget(self.save_config_btn)
 
-        # ── 分隔线 ──────────────────────────────────────────
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("color: #ccc;")
-        layout.addWidget(sep)
+        group.setLayout(v)
+        return group
 
-        # ── 从文档导入生成单词 ────────────────────────────────
-        doc_title = QLabel("从文档导入生成单词")
-        doc_title.setStyleSheet("font-weight: bold; margin-top: 4px;")
-        layout.addWidget(doc_title)
+    def _build_scene_gen_group(self) -> QGroupBox:
+        """区块 B：选择场景生成新词"""
+        group = QGroupBox("选择场景生成新词")
+        v = QVBoxLayout()
+
+        form = QFormLayout()
+
+        self.scene_input = QLineEdit()
+        self.scene_input.setPlaceholderText("如：互联网架构, 雅思核心词")
+        form.addRow("当前场景:", self.scene_input)
+
+        self.scene_count_input = QSpinBox()
+        self.scene_count_input.setRange(5, 30)
+        self.scene_count_input.setValue(10)
+        form.addRow("生成数量:", self.scene_count_input)
+
+        v.addLayout(form)
+
+        self.scene_gen_btn = QPushButton("生成新词")
+        self.scene_gen_btn.clicked.connect(self._generate_by_scene)
+        v.addWidget(self.scene_gen_btn)
+
+        self.scene_status_label = QLabel("")
+        self.scene_status_label.setWordWrap(True)
+        v.addWidget(self.scene_status_label)
+
+        group.setLayout(v)
+        return group
+
+    def _build_doc_gen_group(self) -> QGroupBox:
+        """区块 C：导入文档生成新词"""
+        group = QGroupBox("导入文档生成新词")
+        v = QVBoxLayout()
 
         doc_form = QFormLayout()
 
         file_row = QHBoxLayout()
         self.file_path_input = QLineEdit()
-        self.file_path_input.setPlaceholderText("选择 .pdf / .docx / .doc 文件")
+        self.file_path_input.setPlaceholderText("选择 .pdf / .docx / .doc / .txt 文件")
         self.file_path_input.setReadOnly(True)
-        browse_btn = QPushButton("浏览…")
-        browse_btn.setFixedWidth(60)
-        browse_btn.clicked.connect(self._browse_file)
+        self.browse_btn = QPushButton("浏览…")
+        self.browse_btn.setFixedWidth(60)
+        self.browse_btn.clicked.connect(self._browse_file)
         file_row.addWidget(self.file_path_input)
-        file_row.addWidget(browse_btn)
+        file_row.addWidget(self.browse_btn)
         doc_form.addRow("文件:", file_row)
 
         self.doc_count_input = QSpinBox()
@@ -144,18 +206,47 @@ class SettingsWin(QWidget):
         self.doc_count_input.setValue(10)
         doc_form.addRow("生成数量:", self.doc_count_input)
 
-        layout.addLayout(doc_form)
+        v.addLayout(doc_form)
 
         self.doc_import_btn = QPushButton("导入并生成单词")
         self.doc_import_btn.clicked.connect(self._import_doc)
-        layout.addWidget(self.doc_import_btn)
+        v.addWidget(self.doc_import_btn)
 
         self.doc_status_label = QLabel("")
         self.doc_status_label.setWordWrap(True)
-        layout.addWidget(self.doc_status_label)
+        v.addWidget(self.doc_status_label)
 
-        self.setLayout(layout)
+        group.setLayout(v)
+        return group
 
+    # ─────────────────────────────────────────────────────────────
+    # 状态管理
+    # ─────────────────────────────────────────────────────────────
+    def _update_gen_buttons_state(self):
+        """根据 _config_saved 启用或禁用区块 B / C 的所有交互控件。"""
+        enabled = self._config_saved
+        for w in (
+            self.scene_input, self.scene_count_input, self.scene_gen_btn,
+            self.file_path_input, self.browse_btn,
+            self.doc_count_input, self.doc_import_btn,
+        ):
+            w.setEnabled(enabled)
+
+        if not enabled:
+            self.scene_status_label.setStyleSheet("color: gray")
+            self.scene_status_label.setText("请先保存模型配置")
+            self.doc_status_label.setStyleSheet("color: gray")
+            self.doc_status_label.setText("请先保存模型配置")
+        else:
+            # 清除提示，保留已有的成功/错误状态
+            if self.scene_status_label.text() == "请先保存模型配置":
+                self.scene_status_label.setText("")
+            if self.doc_status_label.text() == "请先保存模型配置":
+                self.doc_status_label.setText("")
+
+    # ─────────────────────────────────────────────────────────────
+    # 区块 A 操作
+    # ─────────────────────────────────────────────────────────────
     def _on_provider_changed(self, provider: str):
         preset = PROVIDER_PRESETS.get(provider, {})
         if preset.get("base_url"):
@@ -195,30 +286,87 @@ class SettingsWin(QWidget):
             self.status_label.setStyleSheet("color: red")
             self.status_label.setText(f"✗ {msg}")
 
-    def _save_settings(self):
+    def _save_model_config(self):
+        api_key = self.api_key_input.text().strip()
+        model = self.model_input.text().strip()
+        if not api_key or not model:
+            self.status_label.setStyleSheet("color: orange")
+            self.status_label.setText("API Key 和模型名称不能为空")
+            return
+
         settings = {
             "provider": self.provider_combo.currentText(),
-            "api_key": self.api_key_input.text(),
+            "api_key":  self.api_key_input.text(),
             "base_url": self.base_url_input.text(),
-            "model": self.model_input.text(),
-            "scene": self.scene_input.text()
+            "model":    model,
         }
         for k, v in settings.items():
-            self.db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (k, v))
+            self.db.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (k, v)
+            )
 
         logger.info(
-            f"[设置] 保存配置 provider={settings['provider']} "
-            f"model={settings['model']} scene={settings['scene']!r}"
+            f"[设置] 保存模型配置 provider={settings['provider']} model={settings['model']}"
         )
 
-        QMessageBox.information(self, "成功", "设置已保存！")
+        self._config_saved = True
+        self._update_gen_buttons_state()
+        self.status_label.setStyleSheet("color: green")
+        self.status_label.setText("✓ 模型配置已保存")
         self.settings_saved.emit()
-        self.hide()
 
+    # ─────────────────────────────────────────────────────────────
+    # 区块 B 操作
+    # ─────────────────────────────────────────────────────────────
+    def _generate_by_scene(self):
+        scene = self.scene_input.text().strip()
+        if not scene:
+            self.scene_status_label.setStyleSheet("color: orange")
+            self.scene_status_label.setText("请填写场景关键词")
+            return
+
+        # 保存 scene 到 DB
+        self.db.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("scene", scene)
+        )
+
+        self.scene_gen_btn.setEnabled(False)
+        self.scene_gen_btn.setText("生成中…")
+        self.scene_status_label.setStyleSheet("")
+        self.scene_status_label.setText("")
+
+        res = self.db.fetch_all("SELECT key, value FROM settings")
+        s = {k: v for k, v in res}
+
+        logger.info(f"[设置] 启动场景生成 scene={scene!r} count={self.scene_count_input.value()}")
+
+        self._scene_worker = SceneGeneratorWorker(
+            s["api_key"], s.get("base_url", ""), s.get("model", ""),
+            scene, self.scene_count_input.value()
+        )
+        self._scene_worker.finished.connect(self._on_scene_finished)
+        self._scene_worker.start()
+
+    def _on_scene_finished(self, words, scene_or_err):
+        self.scene_gen_btn.setEnabled(True)
+        self.scene_gen_btn.setText("生成新词")
+        if not words:
+            self.scene_status_label.setStyleSheet("color: red")
+            self.scene_status_label.setText(f"✗ 生成失败：{scene_or_err}")
+            logger.error(f"[设置] 场景生成失败: {scene_or_err}")
+        else:
+            self.scene_status_label.setStyleSheet("color: green")
+            self.scene_status_label.setText(f"✓ 已生成 {len(words)} 个单词")
+            logger.info(f"[设置] 场景生成成功，共 {len(words)} 个单词")
+            self.scene_words_ready.emit(words, scene_or_err)
+
+    # ─────────────────────────────────────────────────────────────
+    # 区块 C 操作
+    # ─────────────────────────────────────────────────────────────
     def _browse_file(self):
         path, _ = QFileDialog.getOpenFileName(
             self, "选择文档", "",
-            "文档文件 (*.pdf *.docx *.doc)"
+            "文档文件 (*.pdf *.docx *.doc *.txt)"
         )
         if path:
             self.file_path_input.setText(path)
@@ -233,10 +381,6 @@ class SettingsWin(QWidget):
 
         res = self.db.fetch_all("SELECT key, value FROM settings")
         s = {k: v for k, v in res}
-        if not s.get("api_key") or not s.get("model"):
-            self.doc_status_label.setStyleSheet("color: orange")
-            self.doc_status_label.setText("请先保存 API Key 和模型配置")
-            return
 
         self.doc_import_btn.setEnabled(False)
         self.doc_import_btn.setText("生成中…")
@@ -268,16 +412,27 @@ class SettingsWin(QWidget):
             logger.info(f"[设置] 文档导入成功，共 {len(words)} 个单词")
             self.doc_words_ready.emit(words)
 
+    # ─────────────────────────────────────────────────────────────
+    # 初始化加载
+    # ─────────────────────────────────────────────────────────────
     def _load_settings(self):
         res = self.db.fetch_all("SELECT key, value FROM settings")
         settings = {k: v for k, v in res}
+
         if "provider" in settings:
             index = self.provider_combo.findText(settings["provider"])
             if index >= 0:
                 self.provider_combo.blockSignals(True)
                 self.provider_combo.setCurrentIndex(index)
                 self.provider_combo.blockSignals(False)
+
         self.api_key_input.setText(settings.get("api_key", ""))
         self.base_url_input.setText(settings.get("base_url", ""))
         self.model_input.setText(settings.get("model", ""))
         self.scene_input.setText(settings.get("scene", "日常口语"))
+
+        # 存量用户：已有配置直接解锁生成区块
+        if settings.get("api_key") and settings.get("model"):
+            self._config_saved = True
+
+        self._update_gen_buttons_state()
