@@ -44,8 +44,8 @@ class AIGenerator:
         # 截取前 5000 字符避免超出 token 限制
         excerpt = text[:5000]
         prompt = f"""
-        You are a professional English teacher analyzing a document excerpt.
-        From the text below, identify the {count} most frequent and meaningful English words or phrases
+        You are a subject matter expert.Analyze the text below to identify its core theme and domain.
+        From the text below, identify the {count} most frequent and domain-specific English words or phrases
         that are worth learning. Exclude common stop words such as pronouns, prepositions, conjunctions,
         and articles (e.g., the, a, in, of, and, I, you, it, is, are, was, were, etc.).
 
