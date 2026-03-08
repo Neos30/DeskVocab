@@ -82,17 +82,22 @@ python src/main.py
 
 ### 3. Generate Vocabulary
 
+**First-time setup (configure model)**
+
+1. Right-click the system tray icon → **"Model Config"**
+2. Choose a provider, enter your API Key and Base URL (e.g. DeepSeek: `https://api.deepseek.com`)
+3. Click **"Test Connection"** to verify → Save
+
 **Option A: Scene keyword**
 
-1. Right-click the system tray icon → **Settings**
-2. Enter your API Key and Base URL (e.g. DeepSeek: `https://api.deepseek.com`)
-3. Type your scene in the "Current Scene" field
-4. Click **"Save & Generate"** → words are fetched in the background; the desktop updates automatically when done
+1. Right-click the system tray icon → **"Generate Words"**
+2. Type your scene in the "Current Scene" field
+3. Click **"Generate"** → words are fetched in the background; the desktop updates automatically when done
 
 **Option B: Import a document**
 
-1. In the Settings panel, click **"Browse…"** and select a `.pdf` / `.docx` / `.doc` file
-2. Set the word count (default: 10)
+1. Right-click the system tray icon → **"Generate Words"**
+2. Click **"Browse…"** and select a `.pdf` / `.docx` / `.doc` file, then set the word count (default: 10)
 3. Click **"Import & Generate"** → AI extracts high-frequency words from the document; desktop updates when complete
 
 ### 4. Daily Usage
@@ -116,6 +121,9 @@ python src/main.py
 ---
 
 ## 📋 Changelog
+
+### v1.2
+- **Model config split out**: New "Model Config" tray entry, separate from "Generate Words" — first-time setup is now a focused, dedicated flow
 
 ### v1.1
 - Added **document import**: supports `.pdf` / `.docx` / `.doc`; AI extracts high-frequency words automatically

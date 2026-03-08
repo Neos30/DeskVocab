@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPainter, QColor, QFont
 from datetime import datetime
+from src.ui.md3_theme import apply_md3_theme
 
 
 # ── 辅助函数 ────────────────────────────────────────────────
@@ -29,18 +30,18 @@ def _fmt_countdown(ts: str | None) -> str:
 def _status_label(rep, status) -> tuple[str, str]:
     """返回 (文字, 颜色)"""
     if rep is None:
-        return "新词", "#90A4AE"
+        return "新词", "#938F99"
     if status == 1:
-        return "已掌握", "#4CAF50"
+        return "已掌握", "#69DC9E"
     if rep == 0:
-        return "学习中", "#FF9800"
-    return f"第 {rep} 次复习", "#2196F3"
+        return "模糊", "#FFB951"
+    return f"第 {rep} 次复习", "#006AFF"
 
 
 # ── 环形图 ──────────────────────────────────────────────────
 
 class _DonutChart(QWidget):
-    _HOLE_COLOR = QColor(14, 22, 40)
+    _HOLE_COLOR = QColor(28, 27, 31)  # MD3 Surface #1C1B1F
 
     def __init__(self):
         super().__init__()
@@ -168,25 +169,11 @@ class HistoryWin(QWidget):
         self.db = db_manager
         self._all_rows: list = []
         self._init_ui()
+        apply_md3_theme(self)
 
     def _init_ui(self):
         self.setWindowTitle("SpeedDic · 学习记录")
         self.setFixedSize(780, 600)
-        self.setStyleSheet("""
-            QWidget  { background: #0e1628; color: white; }
-            QLineEdit {
-                background: rgba(255,255,255,12);
-                border: 1px solid rgba(255,255,255,30);
-                border-radius: 6px;
-                color: white;
-                padding: 6px 12px;
-                font-size: 13px;
-            }
-            QScrollBar:vertical          { background: transparent; width: 4px; }
-            QScrollBar::handle:vertical  { background: rgba(255,255,255,50); border-radius: 2px; min-height: 20px; }
-            QScrollBar::add-line:vertical,
-            QScrollBar::sub-line:vertical { height: 0; }
-        """)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(22, 20, 22, 20)
@@ -290,10 +277,10 @@ class HistoryWin(QWidget):
         legend_layout.setSpacing(4)
         legend: dict[str, QLabel] = {}
         for label, color in [
-            ("陌生", "#78909C"),
-            ("模糊", "#FF9800"),
-            ("熟练", "#2196F3"),
-            ("牢记", "#4CAF50"),
+            ("陌生", "#938F99"),
+            ("模糊", "#FFB951"),
+            ("熟练", "#006AFF"),
+            ("牢记", "#69DC9E"),
         ]:
             r = QHBoxLayout()
             r.setSpacing(5)
@@ -340,10 +327,10 @@ class HistoryWin(QWidget):
         )[0][0]
 
         seg_data = [
-            (unknown,  QColor(120, 144, 156), "陌生"),
-            (vague,    QColor(255, 152, 0),   "模糊"),
-            (skilled,  QColor(33,  150, 243), "熟练"),
-            (mastered, QColor(76,  175, 80),  "牢记"),
+            (unknown,  QColor(147, 143, 153), "陌生"),   # #938F99 Outline
+            (vague,    QColor(255, 185,  81), "模糊"),   # #FFB951 Warning
+            (skilled,  QColor(  0, 106, 255), "熟练"),   # #006AFF Primary
+            (mastered, QColor(105, 220, 158), "牢记"),   # #69DC9E Tertiary
         ]
         word_total = self.db.fetch_all("SELECT COUNT(*) FROM words")[0][0]
         self.donut.set_data([(v, c) for v, c, _ in seg_data], word_total)
